@@ -12,7 +12,9 @@ static HardwareSerial* trpc_serial;
 
 void trpc_init(HardwareSerial* serial) {
     trpc_serial = serial;
-    while(!trpc_serial) {}
+    while(!trpc_serial) {
+        Serial.println("TRPC Serial failed to init!");
+    }
 }
 
 #ifdef TINYRPC_SERVER
@@ -64,7 +66,7 @@ uint32_t trpc_packTransmit(uint8_t id, uint8_t retnb, uint8_t nbargs, ...) {
     return ret;
 }
 
-void trpc_packTransmitVoid(uint8_t id, uint8_t retnb, uint8_t nbargs, ...) {
+void trpc_packTransmitVoid(uint8_t id, uint8_t nbargs, ...) {
     va_list args;
     va_start(args, nbargs);
 
