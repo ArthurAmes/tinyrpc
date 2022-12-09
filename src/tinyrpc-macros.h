@@ -2,8 +2,10 @@
     Author: Arthur Ames
 
     Helper Macros for the RPC_FUNC macro.
-    If you're not very familiar with C macros, I wouldn't advise trying to understand this
-    It's just here to help recursively expand the RPC_FUNC macro for the signature
+    If you're not very familiar with C macros, I wouldn't advise trying to understand this.
+    All this is done so that everything that can be resolve at compile-time, is resolved at compile time.
+    Also, it makes all of our RPC functions typesafe which is really nice.
+
 */
 
 #ifndef _TINY_RPC_MACROS_H
@@ -49,9 +51,9 @@
 #define MAPT_XX_8(NAME_, ARGS_) NAME_(FIRST ARGS_) MAPT_XX_7(NAME_, TUPLE_TAIL ARGS_)
 #define MAPT_XX_9(NAME_, ARGS_) NAME_(FIRST ARGS_) MAPT_XX_8(NAME_, TUPLE_TAIL ARGS_)
 
-/* Macros to expand argument argument casting */
+/* Macro to do sizeof expansion */
 
-#define MAPT(NAME_, ARGS_) (GLUE(MAPT_,VARCOUNT ARGS_)(NAME_, ARGS_))
+#define MAP(NAME_, ARGS_) (GLUE(MAPT_,VARCOUNT ARGS_)(NAME_, ARGS_))
 #define MAPT_1(NAME_, ARGS_, ...) *(FIRST ARGS_*) (NAME_ GLUE(MAPT_X_,VARCOUNT_TUPLE ((__VA_ARGS__))) (+ sizeof, (__VA_ARGS__)))
 #define MAPT_2(NAME_, ARGS_, ...) *(FIRST ARGS_*) (NAME_ GLUE(MAPT_X_,VARCOUNT_TUPLE ((__VA_ARGS__))) (+ sizeof, (__VA_ARGS__))), MAPT_1(NAME_,TUPLE_TAIL ARGS_,FIRST ARGS_,__VA_ARGS__)
 #define MAPT_3(NAME_, ARGS_, ...) *(FIRST ARGS_*) (NAME_ GLUE(MAPT_X_,VARCOUNT_TUPLE ((__VA_ARGS__))) (+ sizeof, (__VA_ARGS__))), MAPT_2(NAME_,TUPLE_TAIL ARGS_,FIRST ARGS_,__VA_ARGS__)
@@ -64,7 +66,7 @@
 
 /* Macros to expand function definition arguments */
 
-#define MAPN(ARGS_) GLUE(MAPN_,VARCOUNT ARGS_)(ARGS_)
+#define FN_DEF_EXPAND(ARGS_) GLUE(MAPN_,VARCOUNT ARGS_)(ARGS_)
 #define MAPN_1(ARGS_) FIRST ARGS_ i
 #define MAPN_2(ARGS_) FIRST ARGS_ h,MAPN_1(TUPLE_TAIL ARGS_)
 #define MAPN_3(ARGS_) FIRST ARGS_ g,MAPN_2(TUPLE_TAIL ARGS_)
@@ -77,7 +79,7 @@
 
 /* Macros to expand packTransmit arguments */
 
-#define MAPN_X(ARGS_) GLUE(MAPN_X_,VARCOUNT ARGS_)
+#define PTX_EXPAND(ARGS_) GLUE(MAPN_X_,VARCOUNT ARGS_)
 #define MAPN_X_1 sizeof(i),*(uint32_t*)(&i)
 #define MAPN_X_2 sizeof(h),*(uint32_t*)(&h),MAPN_X_1
 #define MAPN_X_3 sizeof(g),*(uint32_t*)(&g),MAPN_X_2
@@ -87,5 +89,23 @@
 #define MAPN_X_7 sizeof(c),*(uint32_t*)(&c),MAPN_X_6
 #define MAPN_X_8 sizeof(b),*(uint32_t*)(&b),MAPN_X_7
 #define MAPN_X_9 sizeof(a),*(uint32_t*)(&a),MAPN_X_8
+
+/* These macros are used to compare if the type of a variable is void */
+/* Long story short, IS_VOID(x) evaluates to 1 if x is void or rpc_void, and 0 otherwise */
+
+#define CHECK_N(x, n, ...) n
+#define CHECK(...) CHECK_N(__VA_ARGS__, 0, )
+#define PROBE(x) x, 1
+
+#define VOID_CHECK__void
+#define VOID_CHECK__rpc_void
+
+#define IS_VOID_PROBE(val)          IS_VOID_PROBE_PROXY(VOID_CHECK_##val)
+#define IS_VOID_PROBE_PROXY(...)    IS_VOID_PROBE_PRIMI(__VA_ARGS__)
+#define IS_VOID_PROBE_PRIMI(x)      IS_VOID_PROBE_COMBI_##x
+#define IS_VOID_PROBE_COMBI_        PROBE(~)
+
+#define IS_VOID(x) CHECK(IS_VOID_PROBE(x))
+
 
 #endif

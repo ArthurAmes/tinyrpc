@@ -2,16 +2,16 @@
     Author: Arthur Ames
 
     The main source file for the tinyRPC library.
-    Written using (mostly) normal C (want to use for other non cpp projects, but lambdas are convienent in this case.)
+    Written using normal C, because I want to use for other non-cpp projects.
 */
 
 #include <tinyrpc.h>
-
 
 static HardwareSerial* trpc_serial;
 
 void trpc_init(HardwareSerial* serial) {
     trpc_serial = serial;
+    trpc_serial->setTimeout(9999999);
     while(!trpc_serial) {
         Serial.println("TRPC Serial failed to init!");
     }
@@ -24,15 +24,22 @@ void trpc_listenServe() {
     if(trpc_serial->available()) {
         trpc_serial->readBytes(&code, 1);
         if(code == 0) return;
+        Serial.println(String("Read code: ") + String(code));
 
-        uint8_t nb = g_trpc_STUBS[code].nargs;
+        extern uint8_t __start_trpc_stubs;
+        uint8_t* stub = (&__start_trpc_stubs)+code*sizeof(RPCStubMap);
+
+        uint8_t nb = pgm_read_byte(stub+2);
+
         uint8_t args[nb] __attribute__ ((aligned (4)));
         trpc_serial->readBytes(args, nb);
-        g_trpc_STUBS[code].stub((RPCArgPtr)args);
+        
+        RPCFStub fn = (RPCFStub)pgm_read_word(stub);
+        fn((RPCArgPtr)args);
     }
 }
 
-void trpc_ret_stub(uint8_t s, uint32_t* v) {
+void trpc_ret_stub(uint8_t s, void* v) {
     for(int i = 0; i < s; i++) {
         trpc_serial->write(*(((uint8_t*)v)+i));
     }
@@ -42,7 +49,17 @@ void trpc_ret_stub(uint8_t s, uint32_t* v) {
 
 #ifdef TINYRPC_CLIENT
 
-void ptx(uint8_t id, uint8_t nbargs, va_list args) {
+void flush_serial_buffer() {
+    int x = trpc_serial->available();
+    for(int i = 0; i < x; i++) {
+        trpc_serial->read();
+    }
+}
+
+void trpc_ptx(uint8_t id, uint8_t nbargs, ...) {
+    flush_serial_buffer();
+    va_list args;
+    va_start(args,nbargs);
     trpc_serial->write(id);
     for(int i = 0; i < nbargs; i++) {
         uint32_t s = va_arg(args, uint32_t);
@@ -51,28 +68,11 @@ void ptx(uint8_t id, uint8_t nbargs, va_list args) {
             trpc_serial->write(*(((uint8_t*)&a)+j));
         }
     }
+    va_end(args);
 }
 
-uint32_t trpc_packTransmit(uint8_t id, uint8_t retnb, uint8_t nbargs, ...) {
-    va_list args;
-    va_start(args, nbargs);
-
-    ptx(id, nbargs, args);
-
-    va_end(args);
-
-    uint32_t ret = 0;
-    trpc_serial->readBytes((uint8_t*)&ret, retnb);
-    return ret;
-}
-
-void trpc_packTransmitVoid(uint8_t id, uint8_t nbargs, ...) {
-    va_list args;
-    va_start(args, nbargs);
-
-    ptx(id, nbargs, args);
-
-    va_end(args);
+void trpc_recvRet(uint8_t s, void* retval) {
+    trpc_serial->readBytes((char*)retval, s);
 }
 
 #endif
