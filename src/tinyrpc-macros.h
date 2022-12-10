@@ -2,7 +2,6 @@
     Author: Arthur Ames
 
     Helper Macros for the RPC_FUNC macro.
-    If you're not very familiar with C macros, I wouldn't advise trying to understand this.
     All this is done so that everything that can be resolve at compile-time, is resolved at compile time.
     Also, it makes all of our RPC functions typesafe which is really nice.
 
@@ -91,14 +90,13 @@
 #define MAPN_X_9 sizeof(a),*(uint32_t*)(&a),MAPN_X_8
 
 /* These macros are used to compare if the type of a variable is void */
-/* Long story short, IS_VOID(x) evaluates to 1 if x is void or rpc_void, and 0 otherwise */
+/* Long story short, IS_VOID(x) evaluates to 1 if x is void, and 0 otherwise */
 
 #define CHECK_N(x, n, ...) n
 #define CHECK(...) CHECK_N(__VA_ARGS__, 0, )
 #define PROBE(x) x, 1
 
 #define VOID_CHECK__void
-#define VOID_CHECK__rpc_void
 
 #define IS_VOID_PROBE(val)          IS_VOID_PROBE_PROXY(VOID_CHECK_##val)
 #define IS_VOID_PROBE_PROXY(...)    IS_VOID_PROBE_PRIMI(__VA_ARGS__)
