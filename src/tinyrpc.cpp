@@ -8,8 +8,6 @@
 #include <tinyrpc.h>
 
 static HardwareSerial* trpc_serial;
-extern uint8_t __start_trpc_stubs;
-extern uint8_t __stop_trpc_stubs;
 
 void TinyRPC::init(HardwareSerial* serial) {
     trpc_serial = serial;
@@ -20,6 +18,9 @@ void TinyRPC::init(HardwareSerial* serial) {
 }
 
 #ifdef TINYRPC_SERVER
+
+extern uint8_t __start_trpc_stubs;
+extern uint8_t __stop_trpc_stubs;
 
 void TinyRPC::listenServe() {
     uint8_t code;
@@ -59,6 +60,10 @@ void TinyRPC::ret_stub(uint8_t s, void* v) {
 
 #ifdef TINYRPC_CLIENT
 
+bool TinyRPC::call_mtx = false; // indicates whether there is still a call that has not returned yet.
+void* TinyRPC::last_p = nullptr; // indicates the last promise we made.
+uint8_t TinyRPC::last_s = 0; // indicates the size of the last promise we made.
+
 void flush_serial_buffer() {
     int x = trpc_serial->available();
     for(int i = 0; i < x; i++) {
@@ -66,7 +71,32 @@ void flush_serial_buffer() {
     }
 }
 
+void TinyRPC::resolve_last() {
+    if(call_mtx == true) { // we have a call active, and therefore an unresolved promise.
+        if(last_p != nullptr) {
+            /* If this is true, we are still waiting on the last promise to resolve before executing. we will wait to resolve it now. */
+            while(trpc_serial->available() < last_s) {}
+            trpc_serial->readBytes((uint8_t*)last_p, last_s);
+            last_s = 0; // set size to zero to indicate that we have resolved the promise.
+        } else {
+            /* we have a call out, but last_p is null. the last promise we made went out of scope, so just clear it out of the serial buffer. */
+            while(trpc_serial->available() < last_s) {}
+            for(int i = 0; i < last_s; i++) {
+                trpc_serial->read();
+            }
+            last_s = 0; // set size to zero to indicate that we have resolved the promise.
+        }
+    }
+
+    call_mtx = false;
+}
+
+// ptx will block until the last call made is resolved, since the atmega can't execute and listen at the same time.
+// ideally, listening to serial on both ends would be done with an interrupt, but that would require manually setting up the
+// serial and i am lazy. in this case, the tradeoff should be fine.
 void TinyRPC::ptx(uint8_t id, uint8_t nbargs, ...) {
+    resolve_last();
+
     flush_serial_buffer();
     va_list args;
     va_start(args,nbargs);
@@ -82,11 +112,11 @@ void TinyRPC::ptx(uint8_t id, uint8_t nbargs, ...) {
     }
     trpc_serial->write(sum);
     va_end(args);
+    call_mtx = true;
 }
 
 void TinyRPC::recvRet(uint8_t s, void* retval) {
-    while(trpc_serial->available() < s) {}
-    trpc_serial->readBytes((char*)retval, s);
+    resolve_last();
 }
 
 #endif
